@@ -40,17 +40,38 @@ UPDATE_PACKAGE() {
 	fi
 }
 
-# 调用示例
-# UPDATE_PACKAGE "OpenAppFilter" "destan19/OpenAppFilter" "master" "" "custom_name1 custom_name2"
-# UPDATE_PACKAGE "open-app-filter" "destan19/OpenAppFilter" "master" "" "luci-app-appfilter oaf" 这样会把原有的open-app-filter，luci-app-appfilter，oaf相关组件删除，不会出现coremark错误。
+# ====================================================================
+# 只添加缺失的两个包
+# ====================================================================
 
-# UPDATE_PACKAGE "包名" "项目地址" "项目分支" "pkg/name，可选，pkg为从大杂烩中单独提取包名插件；name为重命名为包名"
+echo "开始添加缺失的包..."
+
+# 1. 添加 WRTBwmon
+echo "添加 wrtbwmon..."
+UPDATE_PACKAGE "wrtbwmon" "brvphoenix/wrtbwmon" "master"
+UPDATE_PACKAGE "luci-app-wrtbwmon" "brvphoenix/luci-app-wrtbwmon" "master"
+
+# 2. 添加 Lucky
+echo "添加 lucky..."
+UPDATE_PACKAGE "lucky" "gdy666/lucky" "main"
+UPDATE_PACKAGE "luci-app-lucky" "gdy666/luci-app-lucky" "main"
+
+echo "缺失包添加完成！"
+
+# ====================================================================
+# 原有的其他包（保持不变）
+# ====================================================================
+
+echo "开始添加其他主题和插件..."
+
+# 主题
 UPDATE_PACKAGE "argon" "sbwml/luci-theme-argon" "openwrt-24.10"
 UPDATE_PACKAGE "aurora" "eamonxg/luci-theme-aurora" "master"
 UPDATE_PACKAGE "aurora-config" "eamonxg/luci-app-aurora-config" "master"
 UPDATE_PACKAGE "kucat" "sirpdboy/luci-theme-kucat" "master"
 UPDATE_PACKAGE "kucat-config" "sirpdboy/luci-app-kucat-config" "master"
 
+# 科学插件
 UPDATE_PACKAGE "homeproxy" "VIKINGYFY/homeproxy" "main"
 UPDATE_PACKAGE "momo" "nikkinikki-org/OpenWrt-momo" "main"
 UPDATE_PACKAGE "nikki" "nikkinikki-org/OpenWrt-nikki" "main"
@@ -58,8 +79,10 @@ UPDATE_PACKAGE "openclash" "vernesong/OpenClash" "dev" "pkg"
 UPDATE_PACKAGE "passwall" "xiaorouji/openwrt-passwall" "main" "pkg"
 UPDATE_PACKAGE "passwall2" "xiaorouji/openwrt-passwall2" "main" "pkg"
 
+# 网络工具
 UPDATE_PACKAGE "luci-app-tailscale" "asvow/luci-app-tailscale" "main"
 
+# 其他应用
 UPDATE_PACKAGE "ddns-go" "sirpdboy/luci-app-ddns-go" "main"
 UPDATE_PACKAGE "diskman" "lisaac/luci-app-diskman" "master"
 UPDATE_PACKAGE "easytier" "EasyTier/luci-app-easytier" "main"
@@ -74,6 +97,12 @@ UPDATE_PACKAGE "qmodem" "FUjr/QModem" "main"
 UPDATE_PACKAGE "quickfile" "sbwml/luci-app-quickfile" "main"
 UPDATE_PACKAGE "viking" "VIKINGYFY/packages" "main" "" "luci-app-timewol luci-app-wolplus"
 UPDATE_PACKAGE "vnt" "lmq8267/luci-app-vnt" "main"
+
+echo "其他包添加完成！"
+
+# ====================================================================
+# 更新软件包版本
+# ====================================================================
 
 #更新软件包版本
 UPDATE_VERSION() {
@@ -116,6 +145,38 @@ UPDATE_VERSION() {
 	done
 }
 
+echo "开始更新软件包版本..."
+
 #UPDATE_VERSION "软件包名" "测试版，true，可选，默认为否"
 UPDATE_VERSION "sing-box"
-#UPDATE_VERSION "tailscale"
+UPDATE_VERSION "lucky"  # 更新 lucky 版本
+# UPDATE_VERSION "tailscale"
+
+echo "版本更新完成！"
+
+# ====================================================================
+# 验证添加的包
+# ====================================================================
+
+echo -e "\n验证添加的包..."
+echo "=========================================="
+
+# 检查包是否添加成功
+check_package() {
+    local pkg=$1
+    if [ -d "$pkg" ] || find . -maxdepth 2 -type d -name "*$pkg*" | grep -q .; then
+        echo "✓ $pkg 已添加"
+    else
+        echo "✗ $pkg 未找到"
+    fi
+}
+
+echo "检查缺失的包:"
+check_package "wrtbwmon"
+check_package "luci-app-wrtbwmon"
+check_package "lucky"
+check_package "luci-app-lucky"
+
+echo "=========================================="
+echo "Packages.sh 脚本执行完成！"
+echo "=========================================="
