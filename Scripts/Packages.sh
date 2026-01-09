@@ -51,12 +51,12 @@ echo "添加 wrtbwmon..."
 UPDATE_PACKAGE "wrtbwmon" "brvphoenix/wrtbwmon" "master"
 UPDATE_PACKAGE "luci-app-wrtbwmon" "brvphoenix/luci-app-wrtbwmon" "master"
 
-# 2. 添加 Lucky
+# 2. 添加 Lucky - 修正分支问题
 echo "添加 lucky..."
-UPDATE_PACKAGE "lucky" "gdy666/lucky" "main"
-# 单独处理 luci-app-lucky
-echo "处理 luci-app-lucky..."
-rm -rf luci-app-lucky
+# 删除现有的
+rm -rf lucky luci-app-lucky
+# 尝试不同方式
+git clone --depth=1 https://github.com/gdy666/lucky.git
 git clone --depth=1 https://github.com/gdy666/luci-app-lucky.git
 
 # 3. 添加 rtp2httpd - 需要确保包在正确的目录
@@ -222,7 +222,14 @@ echo "=========================================="
 # 检查包是否添加成功
 check_package() {
     local pkg=$1
-    if [ -d "$pkg" ] || find . -maxdepth 2 -type d -name "*$pkg*" | grep -q .; then
+    # 检查当前目录
+    if [ -d "$pkg" ]; then
+        echo "✓ $pkg 已添加（在当前目录）"
+    # 检查 feeds 目录
+    elif [ -d "../feeds/packages/net/$pkg" ] || [ -d "../feeds/luci/applications/$pkg" ]; then
+        echo "✓ $pkg 已添加（在 feeds 目录）"
+    # 检查其他位置
+    elif find . ../feeds/ -maxdepth 3 -type d -name "*$pkg*" 2>/dev/null | grep -q .; then
         echo "✓ $pkg 已添加"
     else
         echo "✗ $pkg 未找到"
