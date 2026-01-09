@@ -51,37 +51,14 @@ echo "添加 wrtbwmon..."
 UPDATE_PACKAGE "wrtbwmon" "brvphoenix/wrtbwmon" "master"
 UPDATE_PACKAGE "luci-app-wrtbwmon" "brvphoenix/luci-app-wrtbwmon" "master"
 
-# 2. 添加 Lucky - 修正分支问题
+# 2. 添加 Lucky
 echo "添加 lucky..."
-# 删除现有的
-rm -rf lucky luci-app-lucky
-# 尝试不同方式
-git clone --depth=1 https://github.com/gdy666/lucky.git
-git clone --depth=1 https://github.com/gdy666/luci-app-lucky.git
+UPDATE_PACKAGE "lucky" "gdy666/lucky" "main"
+UPDATE_PACKAGE "luci-app-lucky" "gdy666/luci-app-lucky" "main"
 
-# 3. 添加 rtp2httpd - 重要：需要将包放在正确的位置
-echo "添加 rtp2httpd 和 luci-app-rtp2httpd..."
-# 删除现有的包
-rm -rf rtp2httpd luci-app-rtp2httpd
-
-# 克隆仓库
-git clone --depth=1 https://github.com/stackia/rtp2httpd.git
-
-# 从正确的目录复制包到当前目录（package/）
-if [ -d "rtp2httpd/openwrt-support/rtp2httpd" ]; then
-    echo "复制 rtp2httpd 包到当前目录"
-    cp -rf rtp2httpd/openwrt-support/rtp2httpd ./
-    echo "rtp2httpd 已添加"
-fi
-
-if [ -d "rtp2httpd/openwrt-support/luci-app-rtp2httpd" ]; then
-    echo "复制 luci-app-rtp2httpd 包到当前目录"
-    cp -rf rtp2httpd/openwrt-support/luci-app-rtp2httpd ./
-    echo "luci-app-rtp2httpd 已添加"
-fi
-
-# 清理
-rm -rf rtp2httpd/
+# 3. 添加 rtp2httpd
+echo "添加 rtp2httpd..."
+UPDATE_PACKAGE "rtp2httpd" "stackia/rtp2httpd" "master"
 
 echo "缺失包添加完成！"
 
@@ -128,31 +105,6 @@ UPDATE_PACKAGE "vnt" "lmq8267/luci-app-vnt" "main"
 echo "其他包添加完成！"
 
 # ====================================================================
-# 验证包是否正确放置
-# ====================================================================
-
-echo -e "\n验证包放置位置..."
-echo "=========================================="
-
-check_package_location() {
-    local pkg=$1
-    local location=$2
-    if [ -d "$location/$pkg" ]; then
-        echo "✓ $pkg 在 $location"
-    else
-        echo "✗ $pkg 不在 $location"
-        # 尝试查找
-        find .. -type d -name "$pkg" 2>/dev/null | head -3
-    fi
-}
-
-echo "检查 rtp2httpd 相关包位置:"
-check_package_location "rtp2httpd" "."
-check_package_location "luci-app-rtp2httpd" "."
-
-echo "=========================================="
-
-# ====================================================================
 # 更新软件包版本
 # ====================================================================
 
@@ -171,11 +123,6 @@ UPDATE_VERSION() {
 
 	for PKG_FILE in $PKG_FILES; do
 		local PKG_REPO=$(grep -Po "PKG_SOURCE_URL:=https://.*github.com/\K[^/]+/[^/]+(?=.*)" $PKG_FILE)
-		if [ -z "$PKG_REPO" ]; then
-			echo "无法获取仓库信息，跳过 $PKG_FILE"
-			continue
-		fi
-		
 		local PKG_TAG=$(curl -sL "https://api.github.com/repos/$PKG_REPO/releases" | jq -r "map(select(.prerelease == $PKG_MARK)) | first | .tag_name")
 
 		local OLD_VER=$(grep -Po "PKG_VERSION:=\K.*" "$PKG_FILE")
@@ -187,7 +134,7 @@ UPDATE_VERSION() {
 
 		local NEW_VER=$(echo $PKG_TAG | sed -E 's/[^0-9]+/\./g; s/^\.|\.$//g')
 		local NEW_URL=$(echo $PKG_URL | sed "s/\$(PKG_VERSION)/$NEW_VER/g; s/\$(PKG_NAME)/$PKG_NAME/g")
-		local NEW_HASH=$(curl -sL "$NEW_URL" 2>/dev/null | sha256sum | cut -d ' ' -f 1)
+		local NEW_HASH=$(curl -sL "$NEW_URL" | sha256sum | cut -d ' ' -f 1)
 
 		echo "old version: $OLD_VER $OLD_HASH"
 		echo "new version: $NEW_VER $NEW_HASH"
@@ -206,7 +153,8 @@ echo "开始更新软件包版本..."
 
 #UPDATE_VERSION "软件包名" "测试版，true，可选，默认为否"
 UPDATE_VERSION "sing-box"
-# UPDATE_VERSION "lucky"  # 暂时注释掉，因为API调用有问题
+UPDATE_VERSION "lucky"  # 更新 lucky 版本
+# UPDATE_VERSION "tailscale"
 
 echo "版本更新完成！"
 
@@ -220,11 +168,7 @@ echo "=========================================="
 # 检查包是否添加成功
 check_package() {
     local pkg=$1
-    # 检查当前目录
-    if [ -d "$pkg" ]; then
-        echo "✓ $pkg 已添加（在当前目录）"
-    # 检查其他位置
-    elif find . ../feeds/ -maxdepth 3 -type d -name "*$pkg*" 2>/dev/null | grep -q .; then
+    if [ -d "$pkg" ] || find . -maxdepth 2 -type d -name "*$pkg*" | grep -q .; then
         echo "✓ $pkg 已添加"
     else
         echo "✗ $pkg 未找到"
@@ -236,190 +180,7 @@ check_package "wrtbwmon"
 check_package "luci-app-wrtbwmon"
 check_package "lucky"
 check_package "luci-app-lucky"
-check_package "rtp2httpd"
-check_package "luci-app-rtp2httpd"
 
 echo "=========================================="
 echo "Packages.sh 脚本执行完成！"
-echo "=========================================="
-
-# ====================================================================
-# 最后的重要步骤 - 修复 rtp2httpd 问题
-# ====================================================================
-
-echo -e "\n修复 rtp2httpd 编译问题..."
-echo "=========================================="
-
-# 1. 检查并修复 rtp2httpd Makefile
-if [ -f "rtp2httpd/Makefile" ]; then
-    echo "检查 rtp2httpd Makefile..."
-    
-    # 确保 PKG_NAME 正确
-    if ! grep -q "^PKG_NAME:=rtp2httpd" rtp2httpd/Makefile; then
-        echo "修复 PKG_NAME..."
-        sed -i 's/^PKG_NAME:=.*/PKG_NAME:=rtp2httpd/' rtp2httpd/Makefile
-    fi
-    
-    # 确保有正确的分类
-    if ! grep -q "^CATEGORY:=" rtp2httpd/Makefile; then
-        echo "添加 CATEGORY..."
-        sed -i '/^SECTION:=/a CATEGORY:=Multimedia' rtp2httpd/Makefile
-    fi
-    
-    # 检查依赖
-    echo "rtp2httpd Makefile 关键信息："
-    grep -E "^(PKG_NAME|SECTION|CATEGORY|DEPENDS)" rtp2httpd/Makefile || echo "部分信息缺失"
-else
-    echo "错误：rtp2httpd/Makefile 不存在！"
-    # 创建基本的 Makefile
-    echo "创建基本的 rtp2httpd Makefile..."
-    cat > rtp2httpd/Makefile << 'EOF'
-include $(TOPDIR)/rules.mk
-
-PKG_NAME:=rtp2httpd
-PKG_VERSION:=1.0
-PKG_RELEASE:=1
-
-PKG_SOURCE_PROTO:=git
-PKG_SOURCE_URL:=https://github.com/stackia/rtp2httpd.git
-PKG_SOURCE_VERSION:=main
-PKG_MIRROR_HASH:=skip
-
-include $(INCLUDE_DIR)/package.mk
-
-define Package/rtp2httpd
-  SECTION:=multimedia
-  CATEGORY:=Multimedia
-  TITLE:=RTP to HTTP streaming server
-  URL:=https://github.com/stackia/rtp2httpd
-  DEPENDS:=+libavahi-client +ffmpeg +libvpx +libopus
-endef
-
-define Package/rtp2httpd/description
-  RTP to HTTP streaming server for video surveillance and IP cameras.
-endef
-
-define Build/Configure
-endef
-
-define Build/Compile
-	$(MAKE) -C $(PKG_BUILD_DIR) \
-		CC="$(TARGET_CC)" \
-		CFLAGS="$(TARGET_CFLAGS)" \
-		LDFLAGS="$(TARGET_LDFLAGS)"
-endef
-
-define Package/rtp2httpd/install
-	$(INSTALL_DIR) $(1)/usr/bin
-	$(INSTALL_BIN) $(PKG_BUILD_DIR)/rtp2httpd $(1)/usr/bin/
-	$(INSTALL_DIR) $(1)/etc/init.d
-	$(INSTALL_BIN) ./files/rtp2httpd.init $(1)/etc/init.d/rtp2httpd
-	$(INSTALL_DIR) $(1)/etc/config
-	$(INSTALL_CONF) ./files/rtp2httpd.config $(1)/etc/config/rtp2httpd
-endef
-
-$(eval $(call BuildPackage,rtp2httpd))
-EOF
-    echo "rtp2httpd Makefile 已创建"
-    
-    # 创建必要的文件
-    mkdir -p rtp2httpd/files
-    cat > rtp2httpd/files/rtp2httpd.init << 'EOF'
-#!/bin/sh /etc/rc.common
-
-START=99
-STOP=10
-
-USE_PROCD=1
-
-start_service() {
-    procd_open_instance
-    procd_set_param command /usr/bin/rtp2httpd -c /etc/config/rtp2httpd
-    procd_set_param respawn
-    procd_close_instance
-}
-
-stop_service() {
-    killall rtp2httpd
-}
-EOF
-    chmod +x rtp2httpd/files/rtp2httpd.init
-    
-    cat > rtp2httpd/files/rtp2httpd.config << 'EOF'
-config rtp2httpd 'main'
-    option enabled '0'
-    option port '8080'
-    option bind_addr '0.0.0.0'
-EOF
-fi
-
-# 2. 检查并修复 luci-app-rtp2httpd Makefile
-if [ -f "luci-app-rtp2httpd/Makefile" ]; then
-    echo -e "\n检查 luci-app-rtp2httpd Makefile..."
-    
-    # 确保依赖正确
-    if ! grep -q "DEPENDS.*rtp2httpd" luci-app-rtp2httpd/Makefile && ! grep -q "LUCI_DEPENDS.*rtp2httpd" luci-app-rtp2httpd/Makefile; then
-        echo "添加 rtp2httpd 依赖..."
-        if grep -q "LUCI_DEPENDS:=" luci-app-rtp2httpd/Makefile; then
-            sed -i 's/\(LUCI_DEPENDS:=.*\)/\1+rtp2httpd/' luci-app-rtp2httpd/Makefile
-        else
-            sed -i '/^LUCI_TITLE:=/a LUCI_DEPENDS:=+rtp2httpd' luci-app-rtp2httpd/Makefile
-        fi
-    fi
-    
-    echo "luci-app-rtp2httpd Makefile 关键信息："
-    grep -E "^(PKG_NAME|LUCI_TITLE|LUCI_DEPENDS)" luci-app-rtp2httpd/Makefile || echo "部分信息缺失"
-fi
-
-# 3. 更新 feeds 确保包被识别
-echo -e "\n更新 feeds 确保包被识别..."
-cd ..
-if [ -f "feeds.conf.default" ]; then
-    echo "更新 feeds..."
-    ./scripts/feeds update -a >/dev/null 2>&1
-    
-    # 强制安装包
-    echo "安装 rtp2httpd 包..."
-    ./scripts/feeds install rtp2httpd 2>/dev/null || echo "rtp2httpd 安装失败，将使用本地包"
-    ./scripts/feeds install luci-app-rtp2httpd 2>/dev/null || echo "luci-app-rtp2httpd 安装失败，将使用本地包"
-    
-    # 检查包是否在 feeds 列表中
-    echo "检查 feeds 列表："
-    ./scripts/feeds list | grep -i rtp 2>/dev/null || echo "未在 feeds 列表中找到 rtp 包"
-else
-    echo "警告：未找到 feeds.conf.default"
-fi
-
-# 4. 确保配置正确
-echo -e "\n确保配置正确..."
-if [ -f ".config" ]; then
-    # 确保 rtp2httpd 配置存在
-    if ! grep -q "CONFIG_PACKAGE_rtp2httpd=" .config; then
-        echo "添加 CONFIG_PACKAGE_rtp2httpd=y 到 .config"
-        echo "CONFIG_PACKAGE_rtp2httpd=y" >> .config
-    fi
-    if ! grep -q "CONFIG_PACKAGE_luci-app-rtp2httpd=" .config; then
-        echo "添加 CONFIG_PACKAGE_luci-app-rtp2httpd=y 到 .config"
-        echo "CONFIG_PACKAGE_luci-app-rtp2httpd=y" >> .config
-    fi
-    
-    # 添加必要的依赖
-    if ! grep -q "CONFIG_PACKAGE_libavahi-client=" .config; then
-        echo "CONFIG_PACKAGE_libavahi-client=y" >> .config
-    fi
-    if ! grep -q "CONFIG_PACKAGE_ffmpeg=" .config; then
-        echo "CONFIG_PACKAGE_ffmpeg=y" >> .config
-    fi
-fi
-
-echo "=========================================="
-echo "修复完成！"
-echo "请运行以下命令："
-echo "1. cd .. && make defconfig"
-echo "2. make menuconfig"
-echo "   在 menuconfig 中："
-echo "   - 按 '/' 搜索 'rtp2httpd'"
-echo "   - 确保 Multimedia -> rtp2httpd 被选中"
-echo "   - 确保 LuCI -> Applications -> luci-app-rtp2httpd 被选中"
-echo "3. 重新编译"
 echo "=========================================="
