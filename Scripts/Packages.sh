@@ -59,6 +59,9 @@ UPDATE_PACKAGE "luci-app-lucky" "gdy666/luci-app-lucky" "main"
 # 3. 添加 rtp2httpd
 echo "添加 rtp2httpd..."
 UPDATE_PACKAGE "rtp2httpd" "stackia/rtp2httpd" "master"
+# 查找 luci-app-rtp2httpd 的仓库地址
+# 如果 stackia/rtp2httpd 仓库中没有 luci-app，需要单独查找
+UPDATE_PACKAGE "luci-app-rtp2httpd" "stackia/luci-app-rtp2httpd" "master"
 
 echo "缺失包添加完成！"
 
@@ -180,6 +183,8 @@ check_package "wrtbwmon"
 check_package "luci-app-wrtbwmon"
 check_package "lucky"
 check_package "luci-app-lucky"
+check_package "rtp2httpd"
+check_package "luci-app-rtp2httpd"
 
 echo "=========================================="
 echo "Packages.sh 脚本执行完成！"
