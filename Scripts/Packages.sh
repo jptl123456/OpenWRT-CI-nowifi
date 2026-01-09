@@ -40,6 +40,77 @@ UPDATE_PACKAGE() {
 	fi
 }
 
+# 新增函数：手动处理 rtp2httpd 仓库
+ADD_RTP2HTTPD() {
+	echo "处理 rtp2httpd 仓库..."
+	
+	# 删除现有的包
+	rm -rf rtp2httpd luci-app-rtp2httpd ../feeds/luci/applications/luci-app-rtp2httpd ../feeds/packages/net/rtp2httpd
+	
+	# 克隆仓库
+	git clone --depth=1 --single-branch --branch master https://github.com/stackia/rtp2httpd.git
+	
+	# 检查仓库结构
+	echo "检查 rtp2httpd 仓库结构..."
+	ls -la rtp2httpd/
+	
+	# 尝试不同的目录结构
+	if [ -d "rtp2httpd/rtp2httpd" ]; then
+		# 如果仓库内有 rtp2httpd 目录
+		cp -rf rtp2httpd/rtp2httpd ./
+		echo "找到 rtp2httpd 目录"
+	elif [ -d "rtp2httpd/package" ]; then
+		# 如果仓库内有 package 目录
+		cp -rf rtp2httpd/package/rtp2httpd ./
+		cp -rf rtp2httpd/package/luci-app-rtp2httpd ./
+		echo "找到 package 目录"
+	elif [ -d "rtp2httpd/luci-app-rtp2httpd" ]; then
+		# 如果仓库内有 luci-app-rtp2httpd 目录
+		cp -rf rtp2httpd/luci-app-rtp2httpd ./
+		echo "找到 luci-app-rtp2httpd 目录"
+	elif [ -f "rtp2httpd/Makefile" ]; then
+		# 如果仓库根目录就是包目录
+		mv rtp2httpd rtp2httpd-package
+		mkdir -p rtp2httpd luci-app-rtp2httpd
+		cp -rf rtp2httpd-package/* rtp2httpd/
+		cp -rf rtp2httpd-package/* luci-app-rtp2httpd/
+		rm -rf rtp2httpd-package
+		echo "使用根目录作为包"
+	else
+		# 查找所有可能的包目录
+		find rtp2httpd -type d -name "*rtp2httpd*" | while read dir; do
+			base_name=$(basename "$dir")
+			if [[ "$base_name" == "rtp2httpd" ]]; then
+				cp -rf "$dir" ./
+				echo "复制 $dir"
+			elif [[ "$base_name" == "luci-app-rtp2httpd" ]]; then
+				cp -rf "$dir" ./
+				echo "复制 $dir"
+			fi
+		done
+	fi
+	
+	# 清理
+	rm -rf rtp2httpd/
+	
+	# 验证
+	if [ -d "rtp2httpd" ] || [ -d "luci-app-rtp2httpd" ]; then
+		echo "rtp2httpd 包处理完成"
+	else
+		echo "警告：未找到预期的包目录"
+		# 尝试手动创建
+		echo "尝试手动创建包结构..."
+		git clone --depth=1 https://github.com/stackia/rtp2httpd.git rtp2httpd-temp
+		# 这里需要根据实际情况调整
+		# 假设仓库结构是标准的 OpenWrt 包结构
+		if [ -d "rtp2httpd-temp" ]; then
+			find rtp2httpd-temp -type f -name "Makefile" | head -5
+			find rtp2httpd-temp -type d | head -10
+		fi
+		rm -rf rtp2httpd-temp
+	fi
+}
+
 # ====================================================================
 # 只添加缺失的两个包
 # ====================================================================
@@ -56,9 +127,9 @@ echo "添加 lucky..."
 UPDATE_PACKAGE "lucky" "gdy666/lucky" "main"
 UPDATE_PACKAGE "luci-app-lucky" "gdy666/luci-app-lucky" "main"
 
-# 3. 添加 rtp2httpd（从同一个仓库克隆）
+# 3. 添加 rtp2httpd（使用专用函数）
 echo "添加 rtp2httpd 和 luci-app-rtp2httpd..."
-UPDATE_PACKAGE "rtp2httpd" "stackia/rtp2httpd" "master" "pkg" "luci-app-rtp2httpd"
+ADD_RTP2HTTPD
 
 echo "缺失包添加完成！"
 
