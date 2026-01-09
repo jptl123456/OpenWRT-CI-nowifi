@@ -51,28 +51,35 @@ echo "添加 wrtbwmon..."
 UPDATE_PACKAGE "wrtbwmon" "brvphoenix/wrtbwmon" "master"
 UPDATE_PACKAGE "luci-app-wrtbwmon" "brvphoenix/luci-app-wrtbwmon" "master"
 
-# 2. 添加 Lucky - 修正分支为 master
+# 2. 添加 Lucky
 echo "添加 lucky..."
-UPDATE_PACKAGE "lucky" "gdy666/lucky" "master"
-UPDATE_PACKAGE "luci-app-lucky" "gdy666/luci-app-lucky" "master"
+UPDATE_PACKAGE "lucky" "gdy666/lucky" "main"
+# 单独处理 luci-app-lucky
+echo "处理 luci-app-lucky..."
+rm -rf luci-app-lucky
+git clone --depth=1 https://github.com/gdy666/luci-app-lucky.git
 
-# 3. 添加 rtp2httpd - 修正为使用正确的分支和目录结构
+# 3. 添加 rtp2httpd - 需要确保包在正确的目录
 echo "添加 rtp2httpd 和 luci-app-rtp2httpd..."
 # 删除现有的包
 rm -rf rtp2httpd luci-app-rtp2httpd ../feeds/luci/applications/luci-app-rtp2httpd ../feeds/packages/net/rtp2httpd
 
-# 克隆仓库（不使用分支参数，使用默认分支）
+# 克隆仓库
 git clone --depth=1 https://github.com/stackia/rtp2httpd.git
 
-# 从正确的目录复制包
+# 从正确的目录复制包到正确的位置
 if [ -d "rtp2httpd/openwrt-support/rtp2httpd" ]; then
-    cp -rf rtp2httpd/openwrt-support/rtp2httpd ./
-    echo "复制 rtp2httpd 包"
+    echo "复制 rtp2httpd 包到 packages/net/"
+    mkdir -p ../feeds/packages/net/
+    cp -rf rtp2httpd/openwrt-support/rtp2httpd ../feeds/packages/net/
+    echo "rtp2httpd 已添加到 packages/net/"
 fi
 
 if [ -d "rtp2httpd/openwrt-support/luci-app-rtp2httpd" ]; then
-    cp -rf rtp2httpd/openwrt-support/luci-app-rtp2httpd ./
-    echo "复制 luci-app-rtp2httpd 包"
+    echo "复制 luci-app-rtp2httpd 包到 luci/applications/"
+    mkdir -p ../feeds/luci/applications/
+    cp -rf rtp2httpd/openwrt-support/luci-app-rtp2httpd ../feeds/luci/applications/
+    echo "luci-app-rtp2httpd 已添加到 luci/applications/"
 fi
 
 # 清理
@@ -121,6 +128,31 @@ UPDATE_PACKAGE "viking" "VIKINGYFY/packages" "main" "" "luci-app-timewol luci-ap
 UPDATE_PACKAGE "vnt" "lmq8267/luci-app-vnt" "main"
 
 echo "其他包添加完成！"
+
+# ====================================================================
+# 验证包是否正确放置
+# ====================================================================
+
+echo -e "\n验证包放置位置..."
+echo "=========================================="
+
+check_package_location() {
+    local pkg=$1
+    local location=$2
+    if [ -d "$location/$pkg" ]; then
+        echo "✓ $pkg 在 $location"
+    else
+        echo "✗ $pkg 不在 $location"
+        # 尝试查找
+        find .. -type d -name "$pkg" 2>/dev/null | head -3
+    fi
+}
+
+echo "检查 rtp2httpd 相关包位置:"
+check_package_location "rtp2httpd" "../feeds/packages/net"
+check_package_location "luci-app-rtp2httpd" "../feeds/luci/applications"
+
+echo "=========================================="
 
 # ====================================================================
 # 更新软件包版本
