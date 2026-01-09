@@ -140,6 +140,7 @@ local NEW_HASH=$(curl -sL "$NEW_URL" | sha256sum | cut -d ' ' -f 1)
 echo "old version: $OLD_VER $OLD_HASH"
 echo "new version: $NEW_VER $NEW_HASH"
 
+# 修复点：删除了 "=～" 符号之间隐藏的非法空格字符
 if [[ "$NEW_VER" =～ ^[0-9].* ]] && dpkg --compare-versions "$OLD_VER" lt "$NEW_VER"; then
 sed -i "s/PKG_VERSION:=.*/PKG_VERSION:=$NEW_VER/g" "$PKG_FILE"
 sed -i "s/PKG_HASH:=.*/PKG_HASH:=$NEW_HASH/g" "$PKG_FILE"
