@@ -56,10 +56,6 @@ echo "添加 lucky..."
 UPDATE_PACKAGE "lucky" "gdy666/lucky" "main"
 UPDATE_PACKAGE "luci-app-lucky" "gdy666/luci-app-lucky" "main"
 
-# 3. 添加 rtp2httpd
-echo "添加 rtp2httpd..."
-UPDATE_PACKAGE "rtp2httpd" "stackia/rtp2httpd" "master"
-
 echo "缺失包添加完成！"
 
 # ====================================================================
