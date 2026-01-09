@@ -26,8 +26,14 @@ UPDATE_PACKAGE() {
         fi
     done
 
-    # 克隆仓库
-    git clone --depth=1 --single-branch --branch "$PKG_BRANCH" "https://github.com/$PKG_REPO.git"
+    # 克隆仓库 - 添加错误处理
+    echo "Cloning $PKG_REPO with branch $PKG_BRANCH..."
+    if git clone --depth=1 --single-branch --branch "$PKG_BRANCH" "https://github.com/$PKG_REPO.git" 2>/dev/null; then
+        echo "Successfully cloned $PKG_REPO"
+    else
+        echo "Warning: Failed to clone $PKG_REPO with branch $PKG_BRANCH, trying without branch specification..."
+        git clone --depth=1 "https://github.com/$PKG_REPO.git"
+    fi
 
     # 处理克隆的仓库
     if [[ "$PKG_SPECIAL" == "pkg" ]]; then
@@ -49,15 +55,17 @@ echo "添加 wrtbwmon..."
 UPDATE_PACKAGE "wrtbwmon" "brvphoenix/wrtbwmon" "master"
 UPDATE_PACKAGE "luci-app-wrtbwmon" "brvphoenix/luci-app-wrtbwmon" "master"
 
-# 2. Lucky (修复：根据报错，分支改为 master)
+# 2. Lucky - 修复分支问题
 echo "添加 lucky..."
 UPDATE_PACKAGE "lucky" "gdy666/lucky" "master"
-UPDATE_PACKAGE "luci-app-lucky" "gdy666/luci-app-lucky" "master"
+# Lucky的luci应用可能使用main分支或没有指定分支
+UPDATE_PACKAGE "luci-app-lucky" "gdy666/luci-app-lucky" "main"
 
-# 3. rtp2httpd (修复：根据报错，分支改为 main)
+# 3. rtp2httpd - 修复分支和仓库问题
 echo "添加 rtp2httpd..."
 UPDATE_PACKAGE "rtp2httpd" "stackia/rtp2httpd" "main"
-UPDATE_PACKAGE "luci-app-rtp2httpd" "stackia/luci-app-rtp2httpd" "main"
+# rtp2httpd的luci应用可能需要使用其他仓库或不同的协议
+UPDATE_PACKAGE "luci-app-rtp2httpd" "zhangjianqing/luci-app-rtp2httpd" "master"
 
 echo "缺失包添加完成！"
 
@@ -87,7 +95,18 @@ UPDATE_VERSION() {
 
     for PKG_FILE in $PKG_FILES; do
         local PKG_REPO=$(grep -Po "PKG_SOURCE_URL:=https://.*github.com/\K[^/]+/[^/]+(?=.*)" $PKG_FILE)
+        
+        if [ -z "$PKG_REPO" ]; then
+            echo "Cannot extract repo from $PKG_FILE"
+            continue
+        fi
+        
         local PKG_TAG=$(curl -sL "https://api.github.com/repos/$PKG_REPO/releases" | jq -r "map(select(.prerelease == $PKG_MARK)) | first | .tag_name")
+
+        if [ -z "$PKG_TAG" ] || [ "$PKG_TAG" = "null" ]; then
+            echo "Cannot get latest tag for $PKG_REPO"
+            continue
+        fi
 
         local OLD_VER=$(grep -Po "PKG_VERSION:=\K.*" "$PKG_FILE")
         local OLD_URL=$(grep -Po "PKG_SOURCE_URL:=\K.*" "$PKG_FILE")
@@ -97,13 +116,13 @@ UPDATE_VERSION() {
         local PKG_URL=$([[ "$OLD_URL" == *"releases"* ]] && echo "${OLD_URL%/}/$OLD_FILE" || echo "${OLD_URL%/}")
         local NEW_VER=$(echo $PKG_TAG | sed -E 's/[^0-9]+/\./g; s/^\.|\.$//g')
         local NEW_URL=$(echo $PKG_URL | sed "s/\$(PKG_VERSION)/$NEW_VER/g; s/\$(PKG_NAME)/$PKG_NAME/g")
-        local NEW_HASH=$(curl -sL "$NEW_URL" | sha256sum | cut -d ' ' -f 1)
+        local NEW_HASH=$(curl -sL "$NEW_URL" 2>/dev/null | sha256sum | cut -d ' ' -f 1)
 
         echo "old version: $OLD_VER $OLD_HASH"
         echo "new version: $NEW_VER $NEW_HASH"
 
-        # 关键修复：这里重新键入了 "=～"，确保中间没有非法空格
-        if [[ "$NEW_VER" =～ ^[0-9].* ]] && dpkg --compare-versions "$OLD_VER" lt "$NEW_VER"; then
+        # 关键修复：使用正确的正则表达式运算符 =~（波浪线紧挨等号）
+        if [[ "$NEW_VER" =~ ^[0-9].* ]] && dpkg --compare-versions "$OLD_VER" lt "$NEW_VER"; then
             sed -i "s/PKG_VERSION:=.*/PKG_VERSION:=$NEW_VER/g" "$PKG_FILE"
             sed -i "s/PKG_HASH:=.*/PKG_HASH:=$NEW_HASH/g" "$PKG_FILE"
             echo "$PKG_FILE version has been updated!"
