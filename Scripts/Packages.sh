@@ -56,12 +56,9 @@ echo "添加 lucky..."
 UPDATE_PACKAGE "lucky" "gdy666/lucky" "main"
 UPDATE_PACKAGE "luci-app-lucky" "gdy666/luci-app-lucky" "main"
 
-# 3. 添加 rtp2httpd
-echo "添加 rtp2httpd..."
-UPDATE_PACKAGE "rtp2httpd" "stackia/rtp2httpd" "master"
-# 查找 luci-app-rtp2httpd 的仓库地址
-# 如果 stackia/rtp2httpd 仓库中没有 luci-app，需要单独查找
-UPDATE_PACKAGE "luci-app-rtp2httpd" "stackia/luci-app-rtp2httpd" "master"
+# 3. 添加 rtp2httpd（从同一个仓库克隆）
+echo "添加 rtp2httpd 和 luci-app-rtp2httpd..."
+UPDATE_PACKAGE "rtp2httpd" "stackia/rtp2httpd" "master" "pkg" "luci-app-rtp2httpd"
 
 echo "缺失包添加完成！"
 
