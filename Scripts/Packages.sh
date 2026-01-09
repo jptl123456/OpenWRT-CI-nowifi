@@ -244,14 +244,182 @@ echo "Packages.sh 脚本执行完成！"
 echo "=========================================="
 
 # ====================================================================
-# 最后的重要步骤
+# 最后的重要步骤 - 修复 rtp2httpd 问题
 # ====================================================================
 
-echo -e "\n重要提示："
-echo "1. rtp2httpd 和 luci-app-rtp2httpd 已添加到当前目录"
-echo "2. 请确保您的配置中有以下设置："
-echo "   CONFIG_PACKAGE_rtp2httpd=y"
-echo "   CONFIG_PACKAGE_luci-app-rtp2httpd=y"
-echo "3. 如果需要，运行以下命令更新 feeds："
-echo "   cd .. && ./scripts/feeds update -a && ./scripts/feeds install -a"
+echo -e "\n修复 rtp2httpd 编译问题..."
+echo "=========================================="
+
+# 1. 检查并修复 rtp2httpd Makefile
+if [ -f "rtp2httpd/Makefile" ]; then
+    echo "检查 rtp2httpd Makefile..."
+    
+    # 确保 PKG_NAME 正确
+    if ! grep -q "^PKG_NAME:=rtp2httpd" rtp2httpd/Makefile; then
+        echo "修复 PKG_NAME..."
+        sed -i 's/^PKG_NAME:=.*/PKG_NAME:=rtp2httpd/' rtp2httpd/Makefile
+    fi
+    
+    # 确保有正确的分类
+    if ! grep -q "^CATEGORY:=" rtp2httpd/Makefile; then
+        echo "添加 CATEGORY..."
+        sed -i '/^SECTION:=/a CATEGORY:=Multimedia' rtp2httpd/Makefile
+    fi
+    
+    # 检查依赖
+    echo "rtp2httpd Makefile 关键信息："
+    grep -E "^(PKG_NAME|SECTION|CATEGORY|DEPENDS)" rtp2httpd/Makefile || echo "部分信息缺失"
+else
+    echo "错误：rtp2httpd/Makefile 不存在！"
+    # 创建基本的 Makefile
+    echo "创建基本的 rtp2httpd Makefile..."
+    cat > rtp2httpd/Makefile << 'EOF'
+include $(TOPDIR)/rules.mk
+
+PKG_NAME:=rtp2httpd
+PKG_VERSION:=1.0
+PKG_RELEASE:=1
+
+PKG_SOURCE_PROTO:=git
+PKG_SOURCE_URL:=https://github.com/stackia/rtp2httpd.git
+PKG_SOURCE_VERSION:=main
+PKG_MIRROR_HASH:=skip
+
+include $(INCLUDE_DIR)/package.mk
+
+define Package/rtp2httpd
+  SECTION:=multimedia
+  CATEGORY:=Multimedia
+  TITLE:=RTP to HTTP streaming server
+  URL:=https://github.com/stackia/rtp2httpd
+  DEPENDS:=+libavahi-client +ffmpeg +libvpx +libopus
+endef
+
+define Package/rtp2httpd/description
+  RTP to HTTP streaming server for video surveillance and IP cameras.
+endef
+
+define Build/Configure
+endef
+
+define Build/Compile
+	$(MAKE) -C $(PKG_BUILD_DIR) \
+		CC="$(TARGET_CC)" \
+		CFLAGS="$(TARGET_CFLAGS)" \
+		LDFLAGS="$(TARGET_LDFLAGS)"
+endef
+
+define Package/rtp2httpd/install
+	$(INSTALL_DIR) $(1)/usr/bin
+	$(INSTALL_BIN) $(PKG_BUILD_DIR)/rtp2httpd $(1)/usr/bin/
+	$(INSTALL_DIR) $(1)/etc/init.d
+	$(INSTALL_BIN) ./files/rtp2httpd.init $(1)/etc/init.d/rtp2httpd
+	$(INSTALL_DIR) $(1)/etc/config
+	$(INSTALL_CONF) ./files/rtp2httpd.config $(1)/etc/config/rtp2httpd
+endef
+
+$(eval $(call BuildPackage,rtp2httpd))
+EOF
+    echo "rtp2httpd Makefile 已创建"
+    
+    # 创建必要的文件
+    mkdir -p rtp2httpd/files
+    cat > rtp2httpd/files/rtp2httpd.init << 'EOF'
+#!/bin/sh /etc/rc.common
+
+START=99
+STOP=10
+
+USE_PROCD=1
+
+start_service() {
+    procd_open_instance
+    procd_set_param command /usr/bin/rtp2httpd -c /etc/config/rtp2httpd
+    procd_set_param respawn
+    procd_close_instance
+}
+
+stop_service() {
+    killall rtp2httpd
+}
+EOF
+    chmod +x rtp2httpd/files/rtp2httpd.init
+    
+    cat > rtp2httpd/files/rtp2httpd.config << 'EOF'
+config rtp2httpd 'main'
+    option enabled '0'
+    option port '8080'
+    option bind_addr '0.0.0.0'
+EOF
+fi
+
+# 2. 检查并修复 luci-app-rtp2httpd Makefile
+if [ -f "luci-app-rtp2httpd/Makefile" ]; then
+    echo -e "\n检查 luci-app-rtp2httpd Makefile..."
+    
+    # 确保依赖正确
+    if ! grep -q "DEPENDS.*rtp2httpd" luci-app-rtp2httpd/Makefile && ! grep -q "LUCI_DEPENDS.*rtp2httpd" luci-app-rtp2httpd/Makefile; then
+        echo "添加 rtp2httpd 依赖..."
+        if grep -q "LUCI_DEPENDS:=" luci-app-rtp2httpd/Makefile; then
+            sed -i 's/\(LUCI_DEPENDS:=.*\)/\1+rtp2httpd/' luci-app-rtp2httpd/Makefile
+        else
+            sed -i '/^LUCI_TITLE:=/a LUCI_DEPENDS:=+rtp2httpd' luci-app-rtp2httpd/Makefile
+        fi
+    fi
+    
+    echo "luci-app-rtp2httpd Makefile 关键信息："
+    grep -E "^(PKG_NAME|LUCI_TITLE|LUCI_DEPENDS)" luci-app-rtp2httpd/Makefile || echo "部分信息缺失"
+fi
+
+# 3. 更新 feeds 确保包被识别
+echo -e "\n更新 feeds 确保包被识别..."
+cd ..
+if [ -f "feeds.conf.default" ]; then
+    echo "更新 feeds..."
+    ./scripts/feeds update -a >/dev/null 2>&1
+    
+    # 强制安装包
+    echo "安装 rtp2httpd 包..."
+    ./scripts/feeds install rtp2httpd 2>/dev/null || echo "rtp2httpd 安装失败，将使用本地包"
+    ./scripts/feeds install luci-app-rtp2httpd 2>/dev/null || echo "luci-app-rtp2httpd 安装失败，将使用本地包"
+    
+    # 检查包是否在 feeds 列表中
+    echo "检查 feeds 列表："
+    ./scripts/feeds list | grep -i rtp 2>/dev/null || echo "未在 feeds 列表中找到 rtp 包"
+else
+    echo "警告：未找到 feeds.conf.default"
+fi
+
+# 4. 确保配置正确
+echo -e "\n确保配置正确..."
+if [ -f ".config" ]; then
+    # 确保 rtp2httpd 配置存在
+    if ! grep -q "CONFIG_PACKAGE_rtp2httpd=" .config; then
+        echo "添加 CONFIG_PACKAGE_rtp2httpd=y 到 .config"
+        echo "CONFIG_PACKAGE_rtp2httpd=y" >> .config
+    fi
+    if ! grep -q "CONFIG_PACKAGE_luci-app-rtp2httpd=" .config; then
+        echo "添加 CONFIG_PACKAGE_luci-app-rtp2httpd=y 到 .config"
+        echo "CONFIG_PACKAGE_luci-app-rtp2httpd=y" >> .config
+    fi
+    
+    # 添加必要的依赖
+    if ! grep -q "CONFIG_PACKAGE_libavahi-client=" .config; then
+        echo "CONFIG_PACKAGE_libavahi-client=y" >> .config
+    fi
+    if ! grep -q "CONFIG_PACKAGE_ffmpeg=" .config; then
+        echo "CONFIG_PACKAGE_ffmpeg=y" >> .config
+    fi
+fi
+
+echo "=========================================="
+echo "修复完成！"
+echo "请运行以下命令："
+echo "1. cd .. && make defconfig"
+echo "2. make menuconfig"
+echo "   在 menuconfig 中："
+echo "   - 按 '/' 搜索 'rtp2httpd'"
+echo "   - 确保 Multimedia -> rtp2httpd 被选中"
+echo "   - 确保 LuCI -> Applications -> luci-app-rtp2httpd 被选中"
+echo "3. 重新编译"
 echo "=========================================="
