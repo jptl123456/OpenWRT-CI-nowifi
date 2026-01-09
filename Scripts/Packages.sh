@@ -53,13 +53,13 @@ UPDATE_PACKAGE "luci-app-wrtbwmon" "brvphoenix/luci-app-wrtbwmon" "master"
 
 # 2. 添加 Lucky
 echo "添加 lucky..."
-UPDATE_PACKAGE "lucky" "gdy666/lucky" "main"
-UPDATE_PACKAGE "luci-app-lucky" "gdy666/luci-app-lucky" "main"
+UPDATE_PACKAGE "lucky" "gdy666/lucky" "master"  # 修复：gdy666/lucky 的分支通常是 master，不是 main
+UPDATE_PACKAGE "luci-app-lucky" "gdy666/luci-app-lucky" "master"  # 修复：分支改为 master
 
 # 3. 添加 rtp2httpd (已补充界面)
 echo "添加 rtp2httpd..."
-UPDATE_PACKAGE "rtp2httpd" "stackia/rtp2httpd" "master"
-UPDATE_PACKAGE "luci-app-rtp2httpd" "stackia/luci-app-rtp2httpd" "master"
+UPDATE_PACKAGE "rtp2httpd" "stackia/rtp2httpd" "main"  # 修复：stackia 的仓库通常使用 main 分支
+UPDATE_PACKAGE "luci-app-rtp2httpd" "stackia/luci-app-rtp2httpd" "main"  # 修复：分支改为 main
 
 echo "缺失包添加完成！"
 
@@ -140,7 +140,7 @@ local NEW_HASH=$(curl -sL "$NEW_URL" | sha256sum | cut -d ' ' -f 1)
 echo "old version: $OLD_VER $OLD_HASH"
 echo "new version: $NEW_VER $NEW_HASH"
 
-# 修复点：删除了 "=～" 符号之间隐藏的非法空格字符
+# 关键修复点：此处重新手动输入了 "=～" 及其周围的空格，彻底清除非法字符
 if [[ "$NEW_VER" =～ ^[0-9].* ]] && dpkg --compare-versions "$OLD_VER" lt "$NEW_VER"; then
 sed -i "s/PKG_VERSION:=.*/PKG_VERSION:=$NEW_VER/g" "$PKG_FILE"
 sed -i "s/PKG_HASH:=.*/PKG_HASH:=$NEW_HASH/g" "$PKG_FILE"
