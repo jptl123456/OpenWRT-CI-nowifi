@@ -59,27 +59,25 @@ rm -rf lucky luci-app-lucky
 git clone --depth=1 https://github.com/gdy666/lucky.git
 git clone --depth=1 https://github.com/gdy666/luci-app-lucky.git
 
-# 3. 添加 rtp2httpd - 需要确保包在正确的目录
+# 3. 添加 rtp2httpd - 重要：需要将包放在正确的位置
 echo "添加 rtp2httpd 和 luci-app-rtp2httpd..."
 # 删除现有的包
-rm -rf rtp2httpd luci-app-rtp2httpd ../feeds/luci/applications/luci-app-rtp2httpd ../feeds/packages/net/rtp2httpd
+rm -rf rtp2httpd luci-app-rtp2httpd
 
 # 克隆仓库
 git clone --depth=1 https://github.com/stackia/rtp2httpd.git
 
-# 从正确的目录复制包到正确的位置
+# 从正确的目录复制包到当前目录（package/）
 if [ -d "rtp2httpd/openwrt-support/rtp2httpd" ]; then
-    echo "复制 rtp2httpd 包到 packages/net/"
-    mkdir -p ../feeds/packages/net/
-    cp -rf rtp2httpd/openwrt-support/rtp2httpd ../feeds/packages/net/
-    echo "rtp2httpd 已添加到 packages/net/"
+    echo "复制 rtp2httpd 包到当前目录"
+    cp -rf rtp2httpd/openwrt-support/rtp2httpd ./
+    echo "rtp2httpd 已添加"
 fi
 
 if [ -d "rtp2httpd/openwrt-support/luci-app-rtp2httpd" ]; then
-    echo "复制 luci-app-rtp2httpd 包到 luci/applications/"
-    mkdir -p ../feeds/luci/applications/
-    cp -rf rtp2httpd/openwrt-support/luci-app-rtp2httpd ../feeds/luci/applications/
-    echo "luci-app-rtp2httpd 已添加到 luci/applications/"
+    echo "复制 luci-app-rtp2httpd 包到当前目录"
+    cp -rf rtp2httpd/openwrt-support/luci-app-rtp2httpd ./
+    echo "luci-app-rtp2httpd 已添加"
 fi
 
 # 清理
@@ -149,8 +147,8 @@ check_package_location() {
 }
 
 echo "检查 rtp2httpd 相关包位置:"
-check_package_location "rtp2httpd" "../feeds/packages/net"
-check_package_location "luci-app-rtp2httpd" "../feeds/luci/applications"
+check_package_location "rtp2httpd" "."
+check_package_location "luci-app-rtp2httpd" "."
 
 echo "=========================================="
 
@@ -225,9 +223,6 @@ check_package() {
     # 检查当前目录
     if [ -d "$pkg" ]; then
         echo "✓ $pkg 已添加（在当前目录）"
-    # 检查 feeds 目录
-    elif [ -d "../feeds/packages/net/$pkg" ] || [ -d "../feeds/luci/applications/$pkg" ]; then
-        echo "✓ $pkg 已添加（在 feeds 目录）"
     # 检查其他位置
     elif find . ../feeds/ -maxdepth 3 -type d -name "*$pkg*" 2>/dev/null | grep -q .; then
         echo "✓ $pkg 已添加"
@@ -246,4 +241,17 @@ check_package "luci-app-rtp2httpd"
 
 echo "=========================================="
 echo "Packages.sh 脚本执行完成！"
+echo "=========================================="
+
+# ====================================================================
+# 最后的重要步骤
+# ====================================================================
+
+echo -e "\n重要提示："
+echo "1. rtp2httpd 和 luci-app-rtp2httpd 已添加到当前目录"
+echo "2. 请确保您的配置中有以下设置："
+echo "   CONFIG_PACKAGE_rtp2httpd=y"
+echo "   CONFIG_PACKAGE_luci-app-rtp2httpd=y"
+echo "3. 如果需要，运行以下命令更新 feeds："
+echo "   cd .. && ./scripts/feeds update -a && ./scripts/feeds install -a"
 echo "=========================================="
