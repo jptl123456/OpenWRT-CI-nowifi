@@ -1,6 +1,77 @@
 #!/bin/bash
 
-#安装和更新软件包
+# ====================================================================
+# 快速修复：移除 luci-theme-aurora，使用 bootstrap 作为默认主题
+# ====================================================================
+
+echo "=== 快速修复：使用 bootstrap 主题替代 luci-theme-aurora ==="
+
+# 1. 修复 luci-light Makefile
+if [ -f "../feeds/luci/luci-light/Makefile" ]; then
+    echo "修复 luci-light..."
+    # 备份原文件
+    cp ../feeds/luci/luci-light/Makefile ../feeds/luci/luci-light/Makefile.bak
+    # 完全重写 DEPENDS 行，只包含必要的依赖，使用 bootstrap 主题
+    sed -i 's/^DEPENDS:=.*$/DEPENDS:=+luci-base +luci-lib-ipkg +luci-lib-jsonc +luci-lib-nixio +rpcd-mod-luci +luci-theme-bootstrap/g' ../feeds/luci/luci-light/Makefile
+    echo "luci-light 修复完成"
+fi
+
+# 2. 修复 luci-nginx Makefile
+if [ -f "../feeds/luci/luci-nginx/Makefile" ]; then
+    echo "修复 luci-nginx..."
+    cp ../feeds/luci/luci-nginx/Makefile ../feeds/luci/luci-nginx/Makefile.bak
+    sed -i 's/^DEPENDS:=.*$/DEPENDS:=+luci-nginx +luci-theme-bootstrap/g' ../feeds/luci/luci-nginx/Makefile
+    echo "luci-nginx 修复完成"
+fi
+
+# 3. 修复 onionshare-cli Makefile
+if [ -f "../feeds/packages/onionshare-cli/Makefile" ]; then
+    echo "修复 onionshare-cli..."
+    cp ../feeds/packages/onionshare-cli/Makefile ../feeds/packages/onionshare-cli/Makefile.bak
+    # 移除 python3-pysocks 和 python3-unidecode 依赖
+    sed -i '/^DEPENDS:/s/+python3-pysocks//g' ../feeds/packages/onionshare-cli/Makefile
+    sed -i '/^DEPENDS:/s/+python3-unidecode//g' ../feeds/packages/onionshare-cli/Makefile
+    sed -i 's/  \+/ /g' ../feeds/packages/onionshare-cli/Makefile
+    echo "onionshare-cli 修复完成"
+fi
+
+# 4. 更新 .config 配置文件
+if [ -f "../.config" ]; then
+    echo "更新配置文件..."
+    # 移除所有 luci-theme-aurora 相关配置
+    sed -i '/luci-theme-aurora/d' ../.config
+    
+    # 确保启用 bootstrap 主题
+    if ! grep -q "CONFIG_PACKAGE_luci-theme-bootstrap=y" ../.config; then
+        echo "CONFIG_PACKAGE_luci-theme-bootstrap=y" >> ../.config
+    fi
+    
+    # 如果使用 luci-light，设置默认主题为 bootstrap
+    if grep -q "CONFIG_PACKAGE_luci-light=y" ../.config; then
+        if ! grep -q "CONFIG_LUCI_LIGHT_THEME" ../.config; then
+            echo 'CONFIG_LUCI_LIGHT_THEME="bootstrap"' >> ../.config
+        else
+            sed -i 's/CONFIG_LUCI_LIGHT_THEME=.*/CONFIG_LUCI_LIGHT_THEME="bootstrap"/g' ../.config
+        fi
+    fi
+    
+    # 明确禁用 luci-theme-aurora
+    echo "# CONFIG_PACKAGE_luci-theme-aurora is not set" >> ../.config
+    
+    echo "配置文件更新完成"
+else
+    echo "警告: 未找到 .config 文件"
+fi
+
+echo "=== 主题修复完成 ==="
+echo "已移除 luci-theme-aurora 所有依赖"
+echo "默认主题设置为: bootstrap"
+echo ""
+
+# ====================================================================
+# 安装和更新软件包
+# ====================================================================
+
 UPDATE_PACKAGE() {
     local PKG_NAME=$1
     local PKG_REPO=$2
@@ -305,3 +376,33 @@ echo "开始更新软件包版本..."
 UPDATE_VERSION "sing-box"
 UPDATE_LUCKY_VERSION  # 使用专门的lucky更新函数
 echo "版本更新完成！"
+
+# ====================================================================
+# 最后的修复检查
+# ====================================================================
+
+echo "=== 进行最后的依赖检查 ==="
+
+# 检查是否还有 luci-theme-aurora 依赖
+if find ../feeds/luci/ -name "Makefile" -type f -exec grep -l "luci-theme-aurora" {} \; 2>/dev/null | grep -q .; then
+    echo "警告：发现仍有 luci-theme-aurora 依赖，正在修复..."
+    find ../feeds/luci/ -name "Makefile" -type f -exec grep -l "luci-theme-aurora" {} \; 2>/dev/null | while read -r file; do
+        echo "修复: $file"
+        sed -i 's/+luci-theme-aurora//g' "$file"
+        sed -i 's/luci-theme-aurora//g' "$file"
+        sed -i 's/  \+/ /g' "$file"
+    done
+else
+    echo "✓ 没有发现 luci-theme-aurora 依赖"
+fi
+
+# 检查是否启用了 bootstrap 主题
+if [ -f "../.config" ] && grep -q "CONFIG_PACKAGE_luci-theme-bootstrap=y" ../.config; then
+    echo "✓ bootstrap 主题已启用"
+else
+    echo "警告：bootstrap 主题未启用，正在添加配置..."
+    echo "CONFIG_PACKAGE_luci-theme-bootstrap=y" >> ../.config
+fi
+
+echo "=== 所有修复完成 ==="
+echo "现在可以开始编译了！"
