@@ -40,77 +40,6 @@ UPDATE_PACKAGE() {
 	fi
 }
 
-# 新增函数：手动处理 rtp2httpd 仓库
-ADD_RTP2HTTPD() {
-	echo "处理 rtp2httpd 仓库..."
-	
-	# 删除现有的包
-	rm -rf rtp2httpd luci-app-rtp2httpd ../feeds/luci/applications/luci-app-rtp2httpd ../feeds/packages/net/rtp2httpd
-	
-	# 克隆仓库
-	git clone --depth=1 --single-branch --branch master https://github.com/stackia/rtp2httpd.git
-	
-	# 检查仓库结构
-	echo "检查 rtp2httpd 仓库结构..."
-	ls -la rtp2httpd/
-	
-	# 尝试不同的目录结构
-	if [ -d "rtp2httpd/rtp2httpd" ]; then
-		# 如果仓库内有 rtp2httpd 目录
-		cp -rf rtp2httpd/rtp2httpd ./
-		echo "找到 rtp2httpd 目录"
-	elif [ -d "rtp2httpd/package" ]; then
-		# 如果仓库内有 package 目录
-		cp -rf rtp2httpd/package/rtp2httpd ./
-		cp -rf rtp2httpd/package/luci-app-rtp2httpd ./
-		echo "找到 package 目录"
-	elif [ -d "rtp2httpd/luci-app-rtp2httpd" ]; then
-		# 如果仓库内有 luci-app-rtp2httpd 目录
-		cp -rf rtp2httpd/luci-app-rtp2httpd ./
-		echo "找到 luci-app-rtp2httpd 目录"
-	elif [ -f "rtp2httpd/Makefile" ]; then
-		# 如果仓库根目录就是包目录
-		mv rtp2httpd rtp2httpd-package
-		mkdir -p rtp2httpd luci-app-rtp2httpd
-		cp -rf rtp2httpd-package/* rtp2httpd/
-		cp -rf rtp2httpd-package/* luci-app-rtp2httpd/
-		rm -rf rtp2httpd-package
-		echo "使用根目录作为包"
-	else
-		# 查找所有可能的包目录
-		find rtp2httpd -type d -name "*rtp2httpd*" | while read dir; do
-			base_name=$(basename "$dir")
-			if [[ "$base_name" == "rtp2httpd" ]]; then
-				cp -rf "$dir" ./
-				echo "复制 $dir"
-			elif [[ "$base_name" == "luci-app-rtp2httpd" ]]; then
-				cp -rf "$dir" ./
-				echo "复制 $dir"
-			fi
-		done
-	fi
-	
-	# 清理
-	rm -rf rtp2httpd/
-	
-	# 验证
-	if [ -d "rtp2httpd" ] || [ -d "luci-app-rtp2httpd" ]; then
-		echo "rtp2httpd 包处理完成"
-	else
-		echo "警告：未找到预期的包目录"
-		# 尝试手动创建
-		echo "尝试手动创建包结构..."
-		git clone --depth=1 https://github.com/stackia/rtp2httpd.git rtp2httpd-temp
-		# 这里需要根据实际情况调整
-		# 假设仓库结构是标准的 OpenWrt 包结构
-		if [ -d "rtp2httpd-temp" ]; then
-			find rtp2httpd-temp -type f -name "Makefile" | head -5
-			find rtp2httpd-temp -type d | head -10
-		fi
-		rm -rf rtp2httpd-temp
-	fi
-}
-
 # ====================================================================
 # 只添加缺失的两个包
 # ====================================================================
@@ -122,14 +51,32 @@ echo "添加 wrtbwmon..."
 UPDATE_PACKAGE "wrtbwmon" "brvphoenix/wrtbwmon" "master"
 UPDATE_PACKAGE "luci-app-wrtbwmon" "brvphoenix/luci-app-wrtbwmon" "master"
 
-# 2. 添加 Lucky
+# 2. 添加 Lucky - 修正分支为 master
 echo "添加 lucky..."
-UPDATE_PACKAGE "lucky" "gdy666/lucky" "main"
-UPDATE_PACKAGE "luci-app-lucky" "gdy666/luci-app-lucky" "main"
+UPDATE_PACKAGE "lucky" "gdy666/lucky" "master"
+UPDATE_PACKAGE "luci-app-lucky" "gdy666/luci-app-lucky" "master"
 
-# 3. 添加 rtp2httpd（使用专用函数）
+# 3. 添加 rtp2httpd - 修正为使用正确的分支和目录结构
 echo "添加 rtp2httpd 和 luci-app-rtp2httpd..."
-ADD_RTP2HTTPD
+# 删除现有的包
+rm -rf rtp2httpd luci-app-rtp2httpd ../feeds/luci/applications/luci-app-rtp2httpd ../feeds/packages/net/rtp2httpd
+
+# 克隆仓库（不使用分支参数，使用默认分支）
+git clone --depth=1 https://github.com/stackia/rtp2httpd.git
+
+# 从正确的目录复制包
+if [ -d "rtp2httpd/openwrt-support/rtp2httpd" ]; then
+    cp -rf rtp2httpd/openwrt-support/rtp2httpd ./
+    echo "复制 rtp2httpd 包"
+fi
+
+if [ -d "rtp2httpd/openwrt-support/luci-app-rtp2httpd" ]; then
+    cp -rf rtp2httpd/openwrt-support/luci-app-rtp2httpd ./
+    echo "复制 luci-app-rtp2httpd 包"
+fi
+
+# 清理
+rm -rf rtp2httpd/
 
 echo "缺失包添加完成！"
 
@@ -194,6 +141,11 @@ UPDATE_VERSION() {
 
 	for PKG_FILE in $PKG_FILES; do
 		local PKG_REPO=$(grep -Po "PKG_SOURCE_URL:=https://.*github.com/\K[^/]+/[^/]+(?=.*)" $PKG_FILE)
+		if [ -z "$PKG_REPO" ]; then
+			echo "无法获取仓库信息，跳过 $PKG_FILE"
+			continue
+		fi
+		
 		local PKG_TAG=$(curl -sL "https://api.github.com/repos/$PKG_REPO/releases" | jq -r "map(select(.prerelease == $PKG_MARK)) | first | .tag_name")
 
 		local OLD_VER=$(grep -Po "PKG_VERSION:=\K.*" "$PKG_FILE")
@@ -205,7 +157,7 @@ UPDATE_VERSION() {
 
 		local NEW_VER=$(echo $PKG_TAG | sed -E 's/[^0-9]+/\./g; s/^\.|\.$//g')
 		local NEW_URL=$(echo $PKG_URL | sed "s/\$(PKG_VERSION)/$NEW_VER/g; s/\$(PKG_NAME)/$PKG_NAME/g")
-		local NEW_HASH=$(curl -sL "$NEW_URL" | sha256sum | cut -d ' ' -f 1)
+		local NEW_HASH=$(curl -sL "$NEW_URL" 2>/dev/null | sha256sum | cut -d ' ' -f 1)
 
 		echo "old version: $OLD_VER $OLD_HASH"
 		echo "new version: $NEW_VER $NEW_HASH"
@@ -224,8 +176,7 @@ echo "开始更新软件包版本..."
 
 #UPDATE_VERSION "软件包名" "测试版，true，可选，默认为否"
 UPDATE_VERSION "sing-box"
-UPDATE_VERSION "lucky"  # 更新 lucky 版本
-# UPDATE_VERSION "tailscale"
+# UPDATE_VERSION "lucky"  # 暂时注释掉，因为API调用有问题
 
 echo "版本更新完成！"
 
