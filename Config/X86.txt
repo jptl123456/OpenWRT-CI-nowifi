@@ -25,11 +25,5 @@ CONFIG_TARGET_ROOTFS_EXT4FS=n
 CONFIG_PACKAGE_kmod-hwmon-w83627ehf=y
 CONFIG_PACKAGE_kmod-hwmon-w83627hf=y
 CONFIG_PACKAGE_kmod-w83627hf-wdt=y
-# 新增：Intel CPU温度监控必需模块
-CONFIG_PACKAGE_kmod-hwmon-core=y        # 硬件监控核心（基础依赖）
-CONFIG_PACKAGE_kmod-hwmon-coretemp=y   # D2550温度读取核心模块
-CONFIG_PACKAGE_kmod-sensor-core=y      # 传感器核心（兼容保障）
-# 新增：用户态温度读取工具（方便调试和LuCI显示）
-CONFIG_PACKAGE_lm-sensors=y
 #插件调整
 CONFIG_PACKAGE_luci-app-dockerman=n
